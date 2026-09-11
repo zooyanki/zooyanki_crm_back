@@ -4,15 +4,14 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 
-import type { RequestWithTenant } from './tenant.guard.js';
+import type { RequestWithAuth } from '../auth/jwt-auth.guard.js';
 
-/// Идентификатор арендатора из текущего запроса. Доступен только там,
-/// где применён TenantGuard.
+/// Идентификатор арендатора из JWT. Доступен только там, где применён JwtAuthGuard.
 export const CurrentTenant = createParamDecorator((_: unknown, context: ExecutionContext): string => {
-  const request = context.switchToHttp().getRequest<RequestWithTenant>();
+  const request = context.switchToHttp().getRequest<RequestWithAuth>();
 
   if (!request.tenantId) {
-    throw new InternalServerErrorException('TenantGuard не применён к этому обработчику');
+    throw new InternalServerErrorException('JwtAuthGuard не применён к этому обработчику');
   }
 
   return request.tenantId;

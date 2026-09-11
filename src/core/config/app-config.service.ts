@@ -44,4 +44,12 @@ export class AppConfigService {
   get publicBaseUrl(): string {
     return this.get('PUBLIC_BASE_URL');
   }
+
+  get jwtSecret(): string {
+    return this.get('JWT_SECRET');
+  }
+
+  get jwtExpiresIn(): string {
+    return this.get('JWT_EXPIRES_IN');
+  }
 }

@@ -1,16 +1,16 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiHeader, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CurrentTenant } from '../tenancy/current-tenant.decorator.js';
-import { TENANT_HEADER, TenantGuard } from '../tenancy/tenant.guard.js';
 import { AnalyticsService } from './analytics.service.js';
 import { DailyTotalsDto, DailyTotalsQueryDto } from './analytics.dto.js';
 
 const DEFAULT_PERIOD_DAYS = 30;
 
 @ApiTags('Аналитика')
-@ApiHeader({ name: TENANT_HEADER, required: true })
-@UseGuards(TenantGuard)
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('analytics')
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}

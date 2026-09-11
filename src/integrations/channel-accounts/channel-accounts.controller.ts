@@ -1,14 +1,14 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
-import { ApiHeader, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard.js';
 import { CurrentTenant } from '../../tenancy/current-tenant.decorator.js';
-import { TENANT_HEADER, TenantGuard } from '../../tenancy/tenant.guard.js';
 import { ChannelAccountsService } from './channel-accounts.service.js';
 import { ChannelAccountViewDto, ConnectChannelAccountDto } from './channel-accounts.dto.js';
 
 @ApiTags('Аккаунты площадок')
-@ApiHeader({ name: TENANT_HEADER, required: true })
-@UseGuards(TenantGuard)
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('channel-accounts')
 export class ChannelAccountsController {
   constructor(private readonly accounts: ChannelAccountsService) {}

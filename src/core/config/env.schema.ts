@@ -18,6 +18,12 @@ export const envSchema = z.object({
   /// Публичный адрес сервиса. Обязателен только для вебхука мессенджера
   /// и XML-фида автозагрузки, поэтому на старте может быть пустым.
   PUBLIC_BASE_URL: z.string().default(''),
+
+  /// Секрет подписи JWT. Генерация та же, что у ENCRYPTION_KEY.
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET должен быть не короче 32 символов'),
+
+  /// Срок жизни access-токена, например 7d или 12h.
+  JWT_EXPIRES_IN: z.string().default('7d'),
 });
 
 export type Env = z.infer<typeof envSchema>;

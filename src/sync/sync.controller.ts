@@ -1,14 +1,14 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
-import { ApiHeader, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CurrentTenant } from '../tenancy/current-tenant.decorator.js';
-import { TENANT_HEADER, TenantGuard } from '../tenancy/tenant.guard.js';
 import { TriggerSyncDto, TriggerSyncResultDto } from './sync.dto.js';
 import { SyncScheduler } from './sync.scheduler.js';
 
 @ApiTags('Синхронизация')
-@ApiHeader({ name: TENANT_HEADER, required: true })
-@UseGuards(TenantGuard)
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('sync')
 export class SyncController {
   constructor(private readonly scheduler: SyncScheduler) {}
