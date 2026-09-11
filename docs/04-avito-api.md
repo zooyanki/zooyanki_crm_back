@@ -49,7 +49,14 @@ ah:access             (иерархия аккаунтов, для authorization
 - `GET  /api/1/agency/finances/transactionsHistory` — агентские транзакции
 
 ### Объявления
-- `GET  /core/v1/items` — список объявлений с фильтрами и пагинацией
+- `GET  /core/v1/items` — список объявлений. **Не более 25 запросов в минуту.**
+  Параметры: `page`, `per_page` (максимум 100), `status`.
+  Два подвоха: `status` по умолчанию равен `active`, поэтому все нужные
+  статусы (`active,removed,old,blocked,rejected`) надо перечислять явно;
+  в `meta` есть только `page` и `per_page`, **общего числа страниц нет** —
+  конец списка определяется по неполной странице.
+  В ответе нет даты публикации: только `id`, `title`, `price`, `status`,
+  `url`, `address`, `category`.
 - `GET  /core/v1/accounts/{user_id}/items/{item_id}/` — карточка
 - `POST /core/v1/items/{item_id}/update_price` — цена, максимум 150 запросов
   в минуту, доступно не для всех категорий
@@ -92,9 +99,24 @@ ah:access             (иерархия аккаунтов, для authorization
 - `/messenger/v2/accounts/{user_id}/blacklist` — чёрный список
 
 ### Статистика
-- `POST /stats/v2/accounts/{user_id}/items` — показы, контакты, избранное
-- `POST /stats/v2/accounts/{user_id}/spendings` — расходы
-- `POST /stats/v1/accounts/{user_id}/items` — устаревшая версия
+
+Версии решают разные задачи, и v2 не заменяет v1:
+
+- `POST /stats/v1/accounts/{user_id}/items` — метрики **по каждому
+  объявлению за каждый день**. Тело: `itemIds`, `dateFrom`, `dateTo`,
+  `fields`, `periodGrouping`. Метрики: `uniqViews`, `uniqContacts`,
+  `uniqFavorites` (варианты без префикса `uniq` устарели).
+  Не более 200 объявлений в запросе, глубина до 270 дней.
+  Ответ: `result.items[].{itemId, stats[].{date, uniqViews, ...}}`.
+- `POST /stats/v2/accounts/{user_id}/items` — аналитика **по профилю**
+  с одной группировкой на запрос (`totals`, `item`, `day`, `week`, `month`).
+  Фильтрации по конкретным объявлениям нет, только по категориям
+  и сотрудникам. Ответ: `result.groupings[].{id, metrics[].{slug, value}}`,
+  где при группировке по датам `id` — unix-время. **Лимит: 1 запрос в минуту.**
+- `POST /stats/v2/accounts/{user_id}/spendings` — расходы, глубина 270 дней,
+  тоже 1 запрос в минуту.
+
+Для пообъявленческой статистики нужен именно v1.
 
 ### Отзывы
 - `GET  /ratings/v1/reviews` — отзывы

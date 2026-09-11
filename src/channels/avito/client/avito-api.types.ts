@@ -18,18 +18,20 @@ export interface AvitoAccountSelf {
 export interface AvitoItem {
   id: number;
   title?: string;
-  price?: number;
-  status?: string;
-  url?: string;
+  /// null, если цена у объявления не указана
+  price?: number | null;
+  status?: 'active' | 'removed' | 'old' | 'blocked' | 'rejected';
+  url?: string | null;
+  address?: string;
   category?: { id: number; name?: string };
-  start_time?: string;
 }
 
+/// В meta нет общего числа страниц — только текущая страница и её размер,
+/// поэтому конец списка определяется по неполной странице.
 export interface AvitoItemsResponse {
   meta: {
     page: number;
     per_page: number;
-    pages: number;
   };
   resources: AvitoItem[];
 }

@@ -23,6 +23,9 @@ export interface ChannelRequest {
   accessToken?: string;
   /// Лимит запросов в минуту для этого метода.
   rateLimitPerMinute?: number;
+  /// Сколько ждать освобождения слота. У методов с жёстким лимитом
+  /// стоит увеличить, иначе пачка запросов будет отваливаться по таймауту.
+  rateLimitMaxWaitMs?: number;
   tenantId?: string | null;
   channelAccountId?: string | null;
   maxAttempts?: number;
@@ -53,7 +56,11 @@ export class ChannelHttpService {
     let lastError: ChannelHttpError | null = null;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      const acquired = await this.rateLimiter.acquire(limitKey, perMinute);
+      const acquired = await this.rateLimiter.acquire(
+        limitKey,
+        perMinute,
+        req.rateLimitMaxWaitMs,
+      );
       if (!acquired) {
         throw new ChannelHttpError(
           `Лимит запросов ${req.endpoint} исчерпан, попробуйте позже`,

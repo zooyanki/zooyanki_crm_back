@@ -46,7 +46,9 @@ export class ListingsService {
         tx.channelListing.findMany({
           where,
           include: { channelAccount: { select: { channel: true } } },
-          orderBy: { publishedAt: 'desc' },
+          // Сортируем по моменту первого импорта: Авито не отдаёт дату
+          // публикации в списке объявлений, так что publishedAt там пуст.
+          orderBy: { createdAt: 'desc' },
           skip: (query.page - 1) * query.perPage,
           take: query.perPage,
         }),

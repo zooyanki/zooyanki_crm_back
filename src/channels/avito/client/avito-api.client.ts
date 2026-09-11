@@ -16,6 +16,7 @@ export interface AvitoRequest {
   query?: Record<string, string | number | boolean | undefined | null>;
   json?: unknown;
   rateLimitPerMinute: number;
+  rateLimitMaxWaitMs?: number;
 }
 
 /// Тонкая обёртка: подставляет базовый адрес и токен, а всю механику
@@ -55,6 +56,7 @@ export class AvitoApiClient {
       json: req.json,
       accessToken,
       rateLimitPerMinute: req.rateLimitPerMinute,
+      rateLimitMaxWaitMs: req.rateLimitMaxWaitMs,
       tenantId: ctx.tenantId,
       channelAccountId: ctx.channelAccountId,
     });

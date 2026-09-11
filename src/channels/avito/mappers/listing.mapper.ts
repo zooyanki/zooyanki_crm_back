@@ -7,7 +7,6 @@ const STATUS_BY_AVITO: Record<string, ListingStatus> = {
   old: ListingStatus.OLD,
   blocked: ListingStatus.BLOCKED,
   rejected: ListingStatus.REJECTED,
-  archived: ListingStatus.ARCHIVED,
   removed: ListingStatus.REMOVED,
 };
 
@@ -23,7 +22,9 @@ export function toCanonicalListing(item: AvitoItem): CanonicalListing {
     categoryId: item.category ? String(item.category.id) : null,
     status: mapStatus(rawStatus),
     rawStatus,
-    publishedAt: item.start_time ? new Date(item.start_time) : null,
+    // Метод списка объявлений не возвращает дату публикации.
+    // Появится, если начнём дочитывать карточку каждого объявления.
+    publishedAt: null,
   };
 }
 
