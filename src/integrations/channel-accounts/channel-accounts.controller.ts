@@ -1,29 +1,10 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsEnum, IsString, MaxLength, MinLength } from 'class-validator';
+import { ApiHeader, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
-import { ChannelCode } from '../../generated/prisma/enums.js';
 import { CurrentTenant } from '../../tenancy/current-tenant.decorator.js';
 import { TENANT_HEADER, TenantGuard } from '../../tenancy/tenant.guard.js';
-import { ChannelAccountsService, type ChannelAccountView } from './channel-accounts.service.js';
-
-export class ConnectChannelAccountDto {
-  @IsEnum(ChannelCode)
-  channel!: ChannelCode;
-
-  @IsString()
-  @MinLength(2)
-  @MaxLength(120)
-  title!: string;
-
-  @IsString()
-  @MinLength(1)
-  clientId!: string;
-
-  @IsString()
-  @MinLength(1)
-  clientSecret!: string;
-}
+import { ChannelAccountsService } from './channel-accounts.service.js';
+import { ChannelAccountViewDto, ConnectChannelAccountDto } from './channel-accounts.dto.js';
 
 @ApiTags('Аккаунты площадок')
 @ApiHeader({ name: TENANT_HEADER, required: true })
@@ -34,25 +15,28 @@ export class ChannelAccountsController {
 
   @Post()
   @ApiOperation({ summary: 'Подключить аккаунт площадки и сразу проверить ключи' })
+  @ApiOkResponse({ type: ChannelAccountViewDto })
   connect(
     @CurrentTenant() tenantId: string,
     @Body() dto: ConnectChannelAccountDto,
-  ): Promise<ChannelAccountView> {
+  ): Promise<ChannelAccountViewDto> {
     return this.accounts.connect(tenantId, dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'Список подключённых аккаунтов' })
-  list(@CurrentTenant() tenantId: string): Promise<ChannelAccountView[]> {
+  @ApiOkResponse({ type: [ChannelAccountViewDto] })
+  list(@CurrentTenant() tenantId: string): Promise<ChannelAccountViewDto[]> {
     return this.accounts.list(tenantId);
   }
 
   @Post(':id/verify')
   @ApiOperation({ summary: 'Перепроверить подключение' })
+  @ApiOkResponse({ type: ChannelAccountViewDto })
   verify(
     @CurrentTenant() tenantId: string,
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<ChannelAccountView> {
+  ): Promise<ChannelAccountViewDto> {
     return this.accounts.verify(tenantId, id);
   }
 }

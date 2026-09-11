@@ -1,25 +1,12 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsDate, IsOptional } from 'class-validator';
+import { ApiHeader, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { CurrentTenant } from '../tenancy/current-tenant.decorator.js';
 import { TENANT_HEADER, TenantGuard } from '../tenancy/tenant.guard.js';
-import { AnalyticsService, type DailyTotals } from './analytics.service.js';
+import { AnalyticsService } from './analytics.service.js';
+import { DailyTotalsDto, DailyTotalsQueryDto } from './analytics.dto.js';
 
 const DEFAULT_PERIOD_DAYS = 30;
-
-export class DailyTotalsQueryDto {
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  from?: Date;
-
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  to?: Date;
-}
 
 @ApiTags('Аналитика')
 @ApiHeader({ name: TENANT_HEADER, required: true })
@@ -30,10 +17,11 @@ export class AnalyticsController {
 
   @Get('daily')
   @ApiOperation({ summary: 'Показы, контакты и расходы по дням' })
+  @ApiOkResponse({ type: [DailyTotalsDto] })
   daily(
     @CurrentTenant() tenantId: string,
     @Query() query: DailyTotalsQueryDto,
-  ): Promise<DailyTotals[]> {
+  ): Promise<DailyTotalsDto[]> {
     const to = query.to ?? new Date();
     const from = query.from ?? new Date(to.getTime() - DEFAULT_PERIOD_DAYS * 86_400_000);
 
