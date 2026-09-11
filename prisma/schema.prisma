@@ -1,0 +1,325 @@
+// Схема данных Zooyanki CRM.
+// Замысел модели описан в docs/05-data-model.md.
+// Каждая доменная таблица содержит tenantId и закрыта политикой RLS —
+// политики объявляются SQL-ом внутри миграций, Prisma их не генерирует.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+// Строка подключения задаётся в prisma.config.ts (для CLI) и в driver adapter
+// при создании PrismaClient — начиная с Prisma 7 поле url здесь не поддерживается.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------- арендаторы
+
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  memberships    Membership[]
+  channelAccount ChannelAccount[]
+  oauthTokens    OauthToken[]
+  products       Product[]
+  variants       Variant[]
+  listings       ChannelListing[]
+  statsDaily     StatsDaily[]
+  syncStates     SyncState[]
+  apiCallLogs    ApiCallLog[]
+
+  @@map("tenants")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String
+  name         String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  memberships Membership[]
+
+  @@map("users")
+}
+
+model Membership {
+  id        String     @id @default(uuid()) @db.Uuid
+  tenantId  String     @db.Uuid
+  userId    String     @db.Uuid
+  role      MemberRole @default(MEMBER)
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+
+  @@map("member_role")
+}
+
+// ------------------------------------------------------ подключённые площадки
+
+model ChannelAccount {
+  id       String      @id @default(uuid()) @db.Uuid
+  tenantId String      @db.Uuid
+  channel  ChannelCode
+  /// Понятное имя подключения, задаёт пользователь
+  title    String
+
+  authType AuthType @default(CLIENT_CREDENTIALS)
+  /// Зашифрованные client_id и client_secret, AES-256-GCM. В логи не попадает.
+  credentialsEncrypted String
+  /// user_id на стороне площадки: у Авито — из /core/v1/accounts/self
+  externalUserId       String?
+  scopes               String[] @default([])
+
+  status     ChannelAccountStatus @default(PENDING)
+  lastError  String?
+  lastSyncAt DateTime?            @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tokens      OauthToken[]
+  listings    ChannelListing[]
+  statsDaily  StatsDaily[]
+  syncStates  SyncState[]
+  apiCallLogs ApiCallLog[]
+
+  @@unique([tenantId, channel, externalUserId])
+  @@index([tenantId, channel])
+  @@map("channel_accounts")
+}
+
+enum ChannelCode {
+  AVITO
+  OZON
+  WILDBERRIES
+  DROM
+
+  @@map("channel_code")
+}
+
+enum AuthType {
+  /// Персональная авторизация: доступ к своему аккаунту
+  CLIENT_CREDENTIALS
+  /// Авторизация приложения: доступ к аккаунту клиента
+  AUTHORIZATION_CODE
+
+  @@map("auth_type")
+}
+
+enum ChannelAccountStatus {
+  PENDING
+  ACTIVE
+  INVALID_CREDENTIALS
+  DISABLED
+
+  @@map("channel_account_status")
+}
+
+model OauthToken {
+  id               String   @id @default(uuid()) @db.Uuid
+  /// Денормализован ради RLS: таблица хранит секреты и должна быть
+  /// закрыта политикой напрямую, без обращения к channel_accounts.
+  tenantId         String   @db.Uuid
+  channelAccountId String   @db.Uuid
+  /// Зашифрованный access token
+  accessToken      String
+  /// Зашифрованный refresh token, есть только у authorization_code
+  refreshToken     String?
+  expiresAt        DateTime @db.Timestamptz(3)
+  scopes           String[] @default([])
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+
+  @@index([channelAccountId, expiresAt])
+  @@map("oauth_tokens")
+}
+
+// -------------------------------------------------------------------- каталог
+
+model Product {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  title       String
+  description String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  variants Variant[]
+
+  @@index([tenantId])
+  @@map("products")
+}
+
+model Variant {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  productId String   @db.Uuid
+  sku       String
+  title     String?
+  price     Decimal? @db.Decimal(14, 2)
+  currency  String   @default("RUB")
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product    Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  listings   ChannelListing[]
+  statsDaily StatsDaily[]
+
+  @@unique([tenantId, sku])
+  @@index([productId])
+  @@map("variants")
+}
+
+/// Публикация варианта на площадке. variantId пуст, пока объявление,
+/// импортированное с площадки, не сопоставлено с нашим каталогом.
+model ChannelListing {
+  id               String  @id @default(uuid()) @db.Uuid
+  tenantId         String  @db.Uuid
+  channelAccountId String  @db.Uuid
+  variantId        String? @db.Uuid
+
+  /// Идентификатор объявления на площадке. У Авито — item_id из REST.
+  externalId String
+  /// Идентификатор позиции в XML-фиде автозагрузки Авито
+  avitoAdId  String?
+
+  title       String?
+  url         String?
+  price       Decimal?      @db.Decimal(14, 2)
+  currency    String        @default("RUB")
+  categoryId  String?
+  status      ListingStatus @default(UNKNOWN)
+  rawStatus   String?
+  lastError   String?
+  publishedAt DateTime?     @db.Timestamptz(3)
+  syncedAt    DateTime?     @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  variant        Variant?       @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  statsDaily     StatsDaily[]
+
+  @@unique([channelAccountId, externalId])
+  @@index([tenantId, status])
+  @@index([variantId])
+  @@map("channel_listings")
+}
+
+enum ListingStatus {
+  ACTIVE
+  BLOCKED
+  ARCHIVED
+  REJECTED
+  REMOVED
+  OLD
+  UNKNOWN
+
+  @@map("listing_status")
+}
+
+// ------------------------------------------------------------------ аналитика
+
+/// Суточный срез метрик по публикации. Заполняется ночной джобой.
+model StatsDaily {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  channelAccountId String   @db.Uuid
+  listingId        String?  @db.Uuid
+  variantId        String?  @db.Uuid
+  date             DateTime @db.Date
+
+  views     Int     @default(0)
+  contacts  Int     @default(0)
+  favorites Int     @default(0)
+  calls     Int     @default(0)
+  spending  Decimal @default(0) @db.Decimal(14, 2)
+  currency  String  @default("RUB")
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount  @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  listing        ChannelListing? @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  variant        Variant?        @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@unique([channelAccountId, listingId, date])
+  @@index([tenantId, date])
+  @@map("stats_daily")
+}
+
+// ------------------------------------------------------------------ служебные
+
+/// Курсор синхронизации: с какого места продолжать опрос после сбоя.
+model SyncState {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @db.Uuid
+  channelAccountId String    @db.Uuid
+  entity           String
+  cursor           String?
+  lastRunAt        DateTime? @db.Timestamptz(3)
+  lastSuccessAt    DateTime? @db.Timestamptz(3)
+  lastError        String?
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([channelAccountId, entity])
+  @@map("sync_states")
+}
+
+/// Журнал вызовов к площадкам. Секреты вырезаются до записи.
+model ApiCallLog {
+  id               String  @id @default(uuid()) @db.Uuid
+  tenantId         String? @db.Uuid
+  channelAccountId String? @db.Uuid
+
+  channel    ChannelCode
+  method     String
+  endpoint   String
+  statusCode Int?
+  durationMs Int
+  ok         Boolean
+  errorCode  String?
+  errorText  String?
+  /// Обрезанные тела запроса и ответа, только для отладки
+  requestSnippet  String?
+  responseSnippet String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant         Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount? @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+
+  @@index([channelAccountId, createdAt])
+  @@index([endpoint, createdAt])
+  @@map("api_call_log")
+}

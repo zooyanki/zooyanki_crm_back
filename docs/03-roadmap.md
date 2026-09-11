@@ -7,20 +7,26 @@
 Цель: подключённый аккаунт Авито, импорт объявлений и статистики.
 Только чтение, аккаунту ничего не грозит.
 
-- `[ ]` Скелет NestJS, TypeScript, ESLint, Prettier
-- `[ ]` `docker-compose` с PostgreSQL и Redis для локальной разработки
-- `[ ]` Конфиг через zod, типизированный `ConfigService`
-- `[ ]` Prisma: начальная схема, миграции, RLS-политики по `tenant_id`
-- `[ ]` Модуль `tenancy`: Tenant, User, Membership, контекст арендатора
-- `[ ]` `core/crypto`: шифрование секретов площадок AES-256-GCM
-- `[ ]` `core/http`: клиент с retry, backoff, token bucket, `api_call_log`
-- `[ ]` `channels/contracts`: интерфейсы адаптеров и канонические DTO
-- `[ ]` Генерация типизированного клиента Авито из OpenAPI-схем
-- `[ ]` `AvitoTokenService`: `POST /token`, кеш в Redis по `expires_in`
-- `[ ]` Подключение аккаунта: сохранение креды, проверка `/core/v1/accounts/self`
-- `[ ]` Импорт объявлений: `GET /core/v1/items` с постраничным обходом
-- `[ ]` Ночная джоба статистики: `/stats/v2/.../items` и `/spendings`
-- `[ ]` REST для фронта + Swagger-схема
+- `[x]` Скелет NestJS, TypeScript, ESLint, Prettier
+- `[x]` `docker-compose` с PostgreSQL и Redis для локальной разработки
+- `[x]` Конфиг через zod, типизированный `AppConfigService`
+- `[x]` Prisma: начальная схема, миграции, RLS-политики по `tenant_id`
+- `[x]` `core/crypto`: шифрование секретов площадок AES-256-GCM
+- `[x]` `core/http`: клиент с retry, backoff, token bucket, `api_call_log`
+- `[x]` `channels/contracts`: интерфейсы адаптеров и канонические DTO
+- `[x]` `AvitoTokenService`: `POST /token`, кеш в Redis по `expires_in`
+- `[x]` Подключение аккаунта: сохранение креды, проверка `/core/v1/accounts/self`
+- `[x]` Импорт объявлений: `GET /core/v1/items` с постраничным обходом
+- `[x]` Джоба статистики: `/stats/v2/.../items`
+- `[x]` Очередь BullMQ: расписание опроса и веерная постановка задач
+- `[x]` REST для фронта + Swagger-схема на `/api/docs/openapi.json`
+- `[ ]` Аутентификация пользователей и выпуск JWT.
+  Сейчас арендатор берётся из заголовка `x-tenant-id` — это заглушка
+  в `TenantGuard`, сервис с ней нельзя выставлять наружу.
+- `[ ]` Генерация типизированного клиента Авито из OpenAPI-схем.
+  Пока в `channels/avito/client/avito-api.types.ts` описан вручную только
+  используемый минимум полей.
+- `[ ]` Расходы на продвижение: `/stats/v2/.../spendings`
 - `[ ]` Экран списка объявлений и графиков показов/контактов (web-репозиторий)
 
 ## Фаза 2 — заказы и склад `[ ]`

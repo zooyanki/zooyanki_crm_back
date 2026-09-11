@@ -3,7 +3,10 @@
 Мультимаркетплейс CRM: управление продажами на Avito, Ozon, Wildberries, Drom
 из одного инструмента. Сейчас в работе — Авито.
 
-Стек: NestJS, PostgreSQL + Prisma, BullMQ + Redis, TypeScript.
+Стек: NestJS 12, PostgreSQL + Prisma 7, BullMQ + Redis, TypeScript 6.
+Проект собирается как **ESM**: относительные импорты обязаны заканчиваться
+на `.js`, даже когда указывают на файл `.ts`. Подробности и причины —
+в `docs/adr/0005-esm-and-toolchain.md`.
 Фронтенд живёт в отдельном репозитории `zooyanki_crm` (Next.js), рядом в
 `C:\Users\Илья\My projects\CRM\zooyanki_crm`.
 
@@ -32,6 +35,15 @@
   в логи не попадают.
 - Клиенты к внешним API генерируются из их OpenAPI-схем, а не пишутся руками.
 - Решения из `docs/adr/` не пересматриваются без явной просьбы.
+
+## Локальный запуск
+
+```bash
+docker compose up -d          # PostgreSQL и Redis
+cp .env.example .env          # заполнить ENCRYPTION_KEY
+npm run db:migrate            # миграции
+npm run start:dev             # http://localhost:3000/api/docs
+```
 
 ## Рабочие соглашения
 

@@ -2,6 +2,7 @@ node_modules/
 dist/
 build/
 coverage/
+*.tsbuildinfo
 
 .env
 .env.*
@@ -20,7 +21,7 @@ Thumbs.db
 !.vscode/extensions.json
 
 # сгенерированный клиент Prisma
-prisma/generated/
+src/generated/
 
 # локальные тома docker-compose
 .docker-data/
