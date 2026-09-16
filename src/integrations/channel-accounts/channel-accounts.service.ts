@@ -1,9 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { CryptoService } from '../../core/crypto/crypto.service.js';
 import { PrismaService } from '../../core/db/prisma.service.js';
 import { ChannelHttpError } from '../../core/http/channel-http.error.js';
 import { ChannelRegistry } from '../../channels/channel.registry.js';
+import { isEnabledChannel } from '../../channels/enabled-channels.js';
 import { ChannelAccountStatus, type ChannelCode } from '../../generated/prisma/enums.js';
 
 export interface ChannelAccountView {
@@ -35,6 +36,13 @@ export class ChannelAccountsService {
   ) {}
 
   async connect(tenantId: string, input: ConnectChannelAccountInput): Promise<ChannelAccountView> {
+    if (!isEnabledChannel(input.channel)) {
+      throw new BadRequestException('Эту площадку сейчас нельзя подключить');
+    }
+    if (!this.registry.has(input.channel)) {
+      throw new BadRequestException('Интеграция площадки ещё в разработке');
+    }
+
     const account = await this.prisma.withTenant(tenantId, (tx) =>
       tx.channelAccount.create({
         data: {

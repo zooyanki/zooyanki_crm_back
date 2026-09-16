@@ -25,6 +25,6 @@ export class AnalyticsController {
     const to = query.to ?? new Date();
     const from = query.from ?? new Date(to.getTime() - DEFAULT_PERIOD_DAYS * 86_400_000);
 
-    return this.analytics.dailyTotals(tenantId, from, to);
+    return this.analytics.dailyTotals(tenantId, from, to, query.channelAccountId);
   }
 }

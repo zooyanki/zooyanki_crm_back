@@ -16,18 +16,25 @@ export class AnalyticsService {
 
   /// Суточная динамика по всем площадкам арендатора.
   /// Показы/контакты — из StatsDaily, расходы — из StatsAccountDaily.
-  async dailyTotals(tenantId: string, from: Date, to: Date): Promise<DailyTotals[]> {
+  async dailyTotals(
+    tenantId: string,
+    from: Date,
+    to: Date,
+    channelAccountId?: string,
+  ): Promise<DailyTotals[]> {
+    const accountFilter = channelAccountId ? { channelAccountId } : {};
+
     return this.prisma.withTenant(tenantId, async (tx) => {
       const [metrics, spendings] = await Promise.all([
         tx.statsDaily.groupBy({
           by: ['date'],
-          where: { date: { gte: from, lte: to } },
+          where: { date: { gte: from, lte: to }, ...accountFilter },
           _sum: { views: true, contacts: true, favorites: true },
           orderBy: { date: 'asc' },
         }),
         tx.statsAccountDaily.groupBy({
           by: ['date'],
-          where: { date: { gte: from, lte: to } },
+          where: { date: { gte: from, lte: to }, ...accountFilter },
           _sum: { spending: true },
           orderBy: { date: 'asc' },
         }),

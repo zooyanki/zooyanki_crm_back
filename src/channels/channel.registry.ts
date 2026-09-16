@@ -23,6 +23,10 @@ export class ChannelRegistry {
     return adapter;
   }
 
+  has(code: ChannelCode): boolean {
+    return this.byCode.has(code);
+  }
+
   supports(code: ChannelCode, capability: Capability): boolean {
     return this.byCode.get(code)?.capabilities.has(capability) ?? false;
   }

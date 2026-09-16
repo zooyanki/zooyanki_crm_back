@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDate, IsOptional } from 'class-validator';
+import { IsDate, IsOptional, IsUUID } from 'class-validator';
 
 export class DailyTotalsQueryDto {
   @ApiPropertyOptional({ type: String, format: 'date-time' })
@@ -14,6 +14,11 @@ export class DailyTotalsQueryDto {
   @Type(() => Date)
   @IsDate()
   to?: Date;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Фильтр по аккаунту площадки' })
+  @IsOptional()
+  @IsUUID()
+  channelAccountId?: string;
 }
 
 export class DailyTotalsDto {

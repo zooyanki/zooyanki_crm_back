@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "channel_code" ADD VALUE IF NOT EXISTS 'XO_MARKET';
+ALTER TYPE "channel_code" ADD VALUE IF NOT EXISTS 'YULA';

@@ -4,7 +4,8 @@ import { ChannelRegistry } from '../channels/channel.registry.js';
 import { Capability } from '../channels/contracts/channel-adapter.js';
 import type { ChannelContext } from '../channels/contracts/channel-context.js';
 import type { CanonicalListing } from '../channels/contracts/models.js';
-import { PrismaService } from '../core/db/prisma.service.js';
+import { PrismaService, type TransactionClient } from '../core/db/prisma.service.js';
+import { ensureVariantForListing } from '../catalog/catalog.service.js';
 import type { ChannelCode } from '../generated/prisma/enums.js';
 
 const SYNC_ENTITY = 'listings';
@@ -44,7 +45,7 @@ export class ListingSyncService {
     try {
       do {
         const page = await adapter.listings.fetchListings(ctx, cursor);
-        await this.upsertPage(ctx, page.items);
+        await this.upsertPage(ctx, channel, page.items);
 
         fetched += page.items.length;
         pages += 1;
@@ -62,7 +63,11 @@ export class ListingSyncService {
     return { fetched, pages };
   }
 
-  private async upsertPage(ctx: ChannelContext, items: CanonicalListing[]): Promise<void> {
+  private async upsertPage(
+    ctx: ChannelContext,
+    channel: ChannelCode,
+    items: CanonicalListing[],
+  ): Promise<void> {
     if (items.length === 0) {
       return;
     }
@@ -83,7 +88,7 @@ export class ListingSyncService {
           syncedAt,
         };
 
-        await tx.channelListing.upsert({
+        const listing = await tx.channelListing.upsert({
           where: {
             channelAccountId_externalId: {
               channelAccountId: ctx.channelAccountId,
@@ -98,6 +103,21 @@ export class ListingSyncService {
           },
           update: common,
         });
+
+        if (!listing.variantId) {
+          const variantId = await ensureVariantForListing(tx as TransactionClient, ctx.tenantId, {
+            id: listing.id,
+            externalId: listing.externalId,
+            title: listing.title,
+            price: listing.price,
+            currency: listing.currency,
+            channelAccount: { channel },
+          });
+          await tx.channelListing.update({
+            where: { id: listing.id },
+            data: { variantId },
+          });
+        }
       }
     });
   }

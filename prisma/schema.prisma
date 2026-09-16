@@ -131,6 +131,8 @@ enum ChannelCode {
   OZON
   WILDBERRIES
   DROM
+  XO_MARKET
+  YULA
 
   @@map("channel_code")
 }

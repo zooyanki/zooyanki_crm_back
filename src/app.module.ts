@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { AnalyticsModule } from './analytics/analytics.module.js';
+import { CatalogModule } from './catalog/catalog.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ChannelsModule } from './channels/channels.module.js';
 import { AppConfigModule } from './core/config/config.module.js';
@@ -37,6 +38,7 @@ import { ReviewsModule } from './reviews/reviews.module.js';
     TenancyModule,
     ChannelsModule,
     ChannelAccountsModule,
+    CatalogModule,
     ListingsModule,
     OrdersModule,
     InventoryModule,
