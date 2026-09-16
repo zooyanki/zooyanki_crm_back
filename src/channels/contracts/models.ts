@@ -1,4 +1,4 @@
-import type { ListingStatus } from '../../generated/prisma/enums.js';
+import type { ListingStatus, OrderStatus } from '../../generated/prisma/enums.js';
 
 /// Публикация на площадке в нашем представлении.
 export interface CanonicalListing {
@@ -36,9 +36,56 @@ export interface StatsQuery {
   to: Date;
 }
 
+/// Расходы на уровне аккаунта за день (без разбивки по объявлениям).
+export interface CanonicalSpendingPoint {
+  date: Date;
+  spending: number;
+  currency: string;
+}
+
+export interface OrdersPage {
+  items: CanonicalOrder[];
+  hasMore: boolean;
+  nextPage: number | null;
+}
+
+export interface CanonicalOrderItem {
+  externalId: string | null;
+  avitoId: string | null;
+  title: string;
+  quantity: number;
+  price: number;
+  total: number;
+  currency: string;
+}
+
+export interface CanonicalOrder {
+  externalId: string;
+  marketplaceId: string | null;
+  status: OrderStatus;
+  rawStatus: string;
+  availableActions: unknown;
+  totalAmount: number | null;
+  commissionAmount: number | null;
+  deliveryAmount: number | null;
+  discountAmount: number | null;
+  currency: string;
+  delivery: unknown;
+  schedules: unknown;
+  placedAt: Date;
+  items: CanonicalOrderItem[];
+}
+
 /// Результат проверки подключённого аккаунта.
 export interface AccountIdentity {
   externalUserId: string;
   name: string | null;
   email: string | null;
+}
+
+/// Остаток для публикации на площадке.
+export interface StockQuantity {
+  /// Идентификатор объявления/позиции на площадке (у Авито — item_id).
+  externalId: string;
+  quantity: number;
 }

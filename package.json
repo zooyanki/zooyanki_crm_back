@@ -59,6 +59,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
+    "@types/multer": "^2.2.0",
     "@types/node": "^22.20.2",
     "@types/pg": "^8.23.1",
     "eslint": "^10.10.0",

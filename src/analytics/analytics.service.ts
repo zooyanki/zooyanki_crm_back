@@ -15,24 +15,51 @@ export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /// Суточная динамика по всем площадкам арендатора.
-  /// Агрегируем в базе, а не в приложении: выборка за квартал
-  /// по тысяче объявлений — это сотни тысяч строк.
+  /// Показы/контакты — из StatsDaily, расходы — из StatsAccountDaily.
   async dailyTotals(tenantId: string, from: Date, to: Date): Promise<DailyTotals[]> {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const rows = await tx.statsDaily.groupBy({
-        by: ['date'],
-        where: { date: { gte: from, lte: to } },
-        _sum: { views: true, contacts: true, favorites: true, spending: true },
-        orderBy: { date: 'asc' },
-      });
+      const [metrics, spendings] = await Promise.all([
+        tx.statsDaily.groupBy({
+          by: ['date'],
+          where: { date: { gte: from, lte: to } },
+          _sum: { views: true, contacts: true, favorites: true },
+          orderBy: { date: 'asc' },
+        }),
+        tx.statsAccountDaily.groupBy({
+          by: ['date'],
+          where: { date: { gte: from, lte: to } },
+          _sum: { spending: true },
+          orderBy: { date: 'asc' },
+        }),
+      ]);
 
-      return rows.map((row) => ({
-        date: row.date.toISOString().slice(0, 10),
-        views: row._sum.views ?? 0,
-        contacts: row._sum.contacts ?? 0,
-        favorites: row._sum.favorites ?? 0,
-        spending: Number(row._sum.spending ?? 0),
-      }));
+      const byDate = new Map<string, DailyTotals>();
+
+      for (const row of metrics) {
+        const date = row.date.toISOString().slice(0, 10);
+        byDate.set(date, {
+          date,
+          views: row._sum.views ?? 0,
+          contacts: row._sum.contacts ?? 0,
+          favorites: row._sum.favorites ?? 0,
+          spending: 0,
+        });
+      }
+
+      for (const row of spendings) {
+        const date = row.date.toISOString().slice(0, 10);
+        const current = byDate.get(date) ?? {
+          date,
+          views: 0,
+          contacts: 0,
+          favorites: 0,
+          spending: 0,
+        };
+        current.spending = Number(row._sum.spending ?? 0);
+        byDate.set(date, current);
+      }
+
+      return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
     });
   }
 }

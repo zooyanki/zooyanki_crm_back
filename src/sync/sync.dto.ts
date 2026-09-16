@@ -13,8 +13,8 @@ export class TriggerSyncDto {
   @IsEnum(ChannelCode)
   channel!: ChannelCode;
 
-  @ApiProperty({ enum: ['listings', 'stats'] })
-  @IsIn(['listings', 'stats'])
+  @ApiProperty({ enum: ['listings', 'stats', 'orders', 'chats', 'reviews', 'stocks'] })
+  @IsIn(['listings', 'stats', 'orders', 'chats', 'reviews', 'stocks'])
   entity!: SyncEntity;
 }
 

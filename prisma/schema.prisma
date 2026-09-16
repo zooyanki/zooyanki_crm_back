@@ -30,8 +30,20 @@ model Tenant {
   variants       Variant[]
   listings       ChannelListing[]
   statsDaily     StatsDaily[]
+  statsAccountDaily StatsAccountDaily[]
+  orders         Order[]
+  orderItems     OrderItem[]
+  inventoryItems InventoryItem[]
+  stockMovements StockMovement[]
+  outbox         OutboxMessage[]
   syncStates     SyncState[]
   apiCallLogs    ApiCallLog[]
+  conversations  Conversation[]
+  messages       Message[]
+  autoloadSettings AutoloadSettings[]
+  autoloadRuns   AutoloadRun[]
+  autoloadItemResults AutoloadItemResult[]
+  reviews        Review[]
 
   @@map("tenants")
 }
@@ -100,8 +112,14 @@ model ChannelAccount {
   tokens      OauthToken[]
   listings    ChannelListing[]
   statsDaily  StatsDaily[]
+  statsAccountDaily StatsAccountDaily[]
+  orders      Order[]
   syncStates  SyncState[]
   apiCallLogs ApiCallLog[]
+  conversations Conversation[]
+  autoloadSettings AutoloadSettings[]
+  autoloadRuns AutoloadRun[]
+  reviews Review[]
 
   @@unique([tenantId, channel, externalUserId])
   @@index([tenantId, channel])
@@ -188,6 +206,8 @@ model Variant {
   product    Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   listings   ChannelListing[]
   statsDaily StatsDaily[]
+  orderItems OrderItem[]
+  inventoryItems InventoryItem[]
 
   @@unique([tenantId, sku])
   @@index([productId])
@@ -275,6 +295,181 @@ model StatsDaily {
   @@map("stats_daily")
 }
 
+/// Суточные расходы на уровне аккаунта площадки.
+/// /stats/v2/spendings не даёт разбивки по объявлениям при группировке day,
+/// поэтому храним отдельно от StatsDaily.
+model StatsAccountDaily {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  channelAccountId String   @db.Uuid
+  date             DateTime @db.Date
+
+  spending Decimal @default(0) @db.Decimal(14, 2)
+  currency String  @default("RUB")
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([channelAccountId, date])
+  @@index([tenantId, date])
+  @@map("stats_account_daily")
+}
+
+// -------------------------------------------------------------------- заказы
+
+enum OrderStatus {
+  PENDING_CONFIRMATION
+  READY_TO_SHIP
+  IN_TRANSIT
+  DELIVERED
+  CANCELED
+  ON_RETURN
+  IN_DISPUTE
+  CLOSED
+  UNKNOWN
+
+  @@map("order_status")
+}
+
+model Order {
+  id               String      @id @default(uuid()) @db.Uuid
+  tenantId         String      @db.Uuid
+  channelAccountId String      @db.Uuid
+  channel          ChannelCode
+  externalId       String
+  marketplaceId    String?
+  status           OrderStatus @default(UNKNOWN)
+  rawStatus        String
+  availableActions Json?
+
+  totalAmount      Decimal? @db.Decimal(14, 2)
+  commissionAmount Decimal? @db.Decimal(14, 2)
+  deliveryAmount   Decimal? @db.Decimal(14, 2)
+  discountAmount   Decimal? @db.Decimal(14, 2)
+  currency         String   @default("RUB")
+
+  deliveryJson Json?
+  schedulesJson Json?
+
+  placedAt  DateTime  @db.Timestamptz(3)
+  syncedAt  DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  items          OrderItem[]
+
+  @@unique([channelAccountId, externalId])
+  @@index([tenantId, status])
+  @@index([tenantId, placedAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String  @id @default(uuid()) @db.Uuid
+  tenantId   String  @db.Uuid
+  orderId    String  @db.Uuid
+  variantId  String? @db.Uuid
+  listingId  String? @db.Uuid
+  externalId String?
+  avitoId    String?
+  title      String
+  quantity   Int
+  price      Decimal @db.Decimal(14, 2)
+  total      Decimal @db.Decimal(14, 2)
+  currency   String  @default("RUB")
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant Variant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([tenantId])
+  @@map("order_items")
+}
+
+// --------------------------------------------------------------------- склад
+
+model InventoryItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  variantId String   @db.Uuid
+  quantity  Int      @default(0)
+  reserved  Int      @default(0)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  variant Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, variantId])
+  @@map("inventory_items")
+}
+
+enum StockMovementType {
+  INBOUND
+  OUTBOUND
+  RESERVE
+  RELEASE
+  ADJUSTMENT
+  CHANNEL_PUSH
+
+  @@map("stock_movement_type")
+}
+
+model StockMovement {
+  id        String            @id @default(uuid()) @db.Uuid
+  tenantId  String            @db.Uuid
+  variantId String
+  type      StockMovementType
+  quantity  Int
+  reason    String?
+  meta      Json?
+  createdAt DateTime          @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, variantId, createdAt])
+  @@map("stock_movements")
+}
+
+/// Исходящие команды к площадкам. Пишется в той же транзакции, что и
+/// изменение своих данных; воркер забирает и вызывает адаптер.
+model OutboxMessage {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @db.Uuid
+  channelAccountId String?
+  type             String
+  payload          Json
+  idempotencyKey   String
+  status           OutboxStatus @default(PENDING)
+  attempts         Int          @default(0)
+  lastError        String?
+  availableAt      DateTime     @default(now()) @db.Timestamptz(3)
+  processedAt      DateTime?    @db.Timestamptz(3)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([status, availableAt])
+  @@map("outbox")
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+
+  @@map("outbox_status")
+}
+
 // ------------------------------------------------------------------ служебные
 
 /// Курсор синхронизации: с какого места продолжать опрос после сбоя.
@@ -322,4 +517,198 @@ model ApiCallLog {
   @@index([channelAccountId, createdAt])
   @@index([endpoint, createdAt])
   @@map("api_call_log")
+}
+
+// ---------------------------------------------------------------- мессенджер
+
+enum MessageDirection {
+  IN
+  OUT
+
+  @@map("message_direction")
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  LINK
+  ITEM
+  LOCATION
+  CALL
+  VOICE
+  SYSTEM
+  DELETED
+  OTHER
+
+  @@map("message_type")
+}
+
+model Conversation {
+  id               String      @id @default(uuid()) @db.Uuid
+  tenantId         String      @db.Uuid
+  channelAccountId String      @db.Uuid
+  channel          ChannelCode
+  /// ID чата на площадке
+  externalId       String
+
+  listingExternalId String?
+  listingTitle      String?
+  peerExternalId    String?
+  peerName          String?
+
+  unreadCount        Int       @default(0)
+  lastMessageAt      DateTime? @db.Timestamptz(3)
+  lastMessagePreview String?
+  lastMessageDirection MessageDirection?
+
+  syncedAt  DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  messages       Message[]
+
+  @@unique([channelAccountId, externalId])
+  @@index([tenantId, lastMessageAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String           @id @default(uuid()) @db.Uuid
+  tenantId       String           @db.Uuid
+  conversationId String           @db.Uuid
+  /// ID сообщения на площадке
+  externalId     String
+
+  direction        MessageDirection
+  type             MessageType      @default(TEXT)
+  bodyText         String?
+  contentJson      Json?
+  authorExternalId String?
+  isRead           Boolean          @default(false)
+  sentAt           DateTime         @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, externalId])
+  @@index([tenantId, conversationId, sentAt])
+  @@map("messages")
+}
+
+// ----------------------------------------------------------- автозагрузка / отзывы
+
+enum AutoloadRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+
+  @@map("autoload_run_status")
+}
+
+/// Настройки XML-фида для аккаунта. Category/Address/Phone — обязательны
+/// для большинства категорий Авито; без них выгрузка отклонит позиции.
+model AutoloadSettings {
+  id               String @id @default(uuid()) @db.Uuid
+  tenantId         String @db.Uuid
+  channelAccountId String @db.Uuid
+
+  /// Секрет в URL публичного фида
+  feedToken     String
+  category      String  @default("Запчасти и аксессуары")
+  goodsType     String?
+  address       String  @default("Россия")
+  contactPhone  String?
+  managerName   String?
+  condition     String  @default("Новое")
+  descriptionFallback String @default("Описание уточняйте у продавца")
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([channelAccountId])
+  @@index([tenantId])
+  @@map("autoload_settings")
+}
+
+model AutoloadRun {
+  id               String            @id @default(uuid()) @db.Uuid
+  tenantId         String            @db.Uuid
+  channelAccountId String            @db.Uuid
+  status           AutoloadRunStatus @default(PENDING)
+  externalReportId String?
+  itemsTotal       Int               @default(0)
+  itemsOk          Int               @default(0)
+  itemsError       Int               @default(0)
+  summaryJson      Json?
+  lastError        String?
+  startedAt        DateTime          @default(now()) @db.Timestamptz(3)
+  finishedAt       DateTime?         @db.Timestamptz(3)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
+
+  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount       @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  items          AutoloadItemResult[]
+
+  @@index([tenantId, startedAt])
+  @@index([channelAccountId, startedAt])
+  @@map("autoload_runs")
+}
+
+model AutoloadItemResult {
+  id        String  @id @default(uuid()) @db.Uuid
+  tenantId  String  @db.Uuid
+  runId     String  @db.Uuid
+  adId      String
+  avitoId   String?
+  section   String?
+  sectionTitle String?
+  avitoStatus String?
+  url       String?
+  messagesJson Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  run    AutoloadRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([tenantId, adId])
+  @@map("autoload_item_results")
+}
+
+model Review {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  channelAccountId String   @db.Uuid
+  channel          ChannelCode
+  externalId       String
+  score            Int
+  text             String?
+  stage            String?
+  canAnswer        Boolean  @default(false)
+  itemExternalId   String?
+  itemTitle        String?
+  authorName       String?
+  publishedAt      DateTime? @db.Timestamptz(3)
+  answerExternalId String?
+  answerText       String?
+  syncedAt         DateTime? @db.Timestamptz(3)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([channelAccountId, externalId])
+  @@index([tenantId, publishedAt])
+  @@map("reviews")
 }

@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 
 import type { StatsReader } from '../../contracts/channel-adapter.js';
 import type { ChannelContext } from '../../contracts/channel-context.js';
-import type { CanonicalStatsPoint, StatsQuery } from '../../contracts/models.js';
+import type {
+  CanonicalSpendingPoint,
+  CanonicalStatsPoint,
+  StatsQuery,
+} from '../../contracts/models.js';
 import {
   AVITO_ENDPOINTS,
   AVITO_RATE_LIMITS,
@@ -11,7 +15,12 @@ import {
 } from '../avito.constants.js';
 import { AvitoCredentialsService } from '../auth/avito-credentials.service.js';
 import { AvitoApiClient } from '../client/avito-api.client.js';
-import type { AvitoStatsRequest, AvitoStatsResponse } from '../client/avito-api.types.js';
+import type {
+  AvitoSpendingsRequest,
+  AvitoSpendingsResponse,
+  AvitoStatsRequest,
+  AvitoStatsResponse,
+} from '../client/avito-api.types.js';
 
 const STATS_FIELDS = ['uniqViews', 'uniqContacts', 'uniqFavorites'];
 
@@ -32,8 +41,6 @@ export class AvitoStatsService implements StatsReader {
     const from = clampRange(query.from, query.to);
     const points: CanonicalStatsPoint[] = [];
 
-    // Метод принимает ограниченное число объявлений за раз, поэтому
-    // разбиваем список на пачки.
     for (const batch of chunk(query.externalIds, AVITO_STATS_BATCH_SIZE)) {
       const body: AvitoStatsRequest = {
         dateFrom: toIsoDate(from),
@@ -49,8 +56,6 @@ export class AvitoStatsService implements StatsReader {
         endpoint: AVITO_ENDPOINTS.itemStats,
         json: body,
         rateLimitPerMinute: AVITO_RATE_LIMITS.itemStats,
-        // Пачек может быть несколько, а лимит метода низкий: ждём слот
-        // дольше обычного, вместо того чтобы падать и ретраить всю джобу.
         rateLimitMaxWaitMs: 120_000,
       });
 
@@ -69,6 +74,38 @@ export class AvitoStatsService implements StatsReader {
 
     return points;
   }
+
+  async fetchDailySpendings(
+    ctx: ChannelContext,
+    from: Date,
+    to: Date,
+  ): Promise<CanonicalSpendingPoint[]> {
+    const userId = await this.credentials.externalUserId(ctx);
+    const path = AVITO_ENDPOINTS.spendings.replace('{user_id}', userId);
+    const body: AvitoSpendingsRequest = {
+      dateFrom: toIsoDate(clampRange(from, to)),
+      dateTo: toIsoDate(to),
+      grouping: 'day',
+      spendingTypes: ['all'],
+    };
+
+    const response = await this.api.request<AvitoSpendingsResponse>(ctx, {
+      method: 'POST',
+      path,
+      endpoint: AVITO_ENDPOINTS.spendings,
+      json: body,
+      rateLimitPerMinute: AVITO_RATE_LIMITS.spendings,
+      rateLimitMaxWaitMs: 120_000,
+    });
+
+    return (response.result.groupings ?? [])
+      .filter((group) => Boolean(group.date))
+      .map((group) => ({
+        date: new Date(group.date!),
+        spending: (group.spendings ?? []).reduce((sum, row) => sum + (row.value ?? 0), 0),
+        currency: 'RUB',
+      }));
+  }
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -85,8 +122,6 @@ function toIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/// Авито ограничивает глубину выборки 270 днями и отвечает ошибкой
-/// на более широкий диапазон.
 function clampRange(from: Date, to: Date): Date {
   const earliest = new Date(to.getTime() - AVITO_STATS_MAX_DAYS * 86_400_000);
   return from < earliest ? earliest : from;

@@ -15,8 +15,11 @@ export interface AvitoRequest {
   endpoint: string;
   query?: Record<string, string | number | boolean | undefined | null>;
   json?: unknown;
+  headers?: Record<string, string>;
   rateLimitPerMinute: number;
   rateLimitMaxWaitMs?: number;
+  responseType?: 'json' | 'buffer';
+  formData?: FormData;
 }
 
 /// Тонкая обёртка: подставляет базовый адрес и токен, а всю механику
@@ -54,9 +57,12 @@ export class AvitoApiClient {
       endpoint: req.endpoint,
       query: req.query,
       json: req.json,
+      headers: req.headers,
       accessToken,
       rateLimitPerMinute: req.rateLimitPerMinute,
       rateLimitMaxWaitMs: req.rateLimitMaxWaitMs,
+      responseType: req.responseType,
+      formData: req.formData,
       tenantId: ctx.tenantId,
       channelAccountId: ctx.channelAccountId,
     });

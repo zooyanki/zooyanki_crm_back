@@ -113,6 +113,19 @@ export class ChannelAccountsService {
     });
   }
 
+  /// Поиск аккаунта для входящего вебхука (без HTTP-контекста арендатора).
+  async findActiveById(channelAccountId: string): Promise<{
+    id: string;
+    tenantId: string;
+    channel: ChannelCode;
+    externalUserId: string | null;
+  } | null> {
+    return this.prisma.channelAccount.findFirst({
+      where: { id: channelAccountId, status: ChannelAccountStatus.ACTIVE },
+      select: { id: true, tenantId: true, channel: true, externalUserId: true },
+    });
+  }
+
   private async requireAccount(tenantId: string, channelAccountId: string) {
     const account = await this.prisma.withTenant(tenantId, (tx) =>
       tx.channelAccount.findUnique({ where: { id: channelAccountId } }),
@@ -123,6 +136,11 @@ export class ChannelAccountsService {
     }
 
     return account;
+  }
+
+  /// Публичный доступ для воркеров outbox/sync без HTTP-контекста.
+  async requireForTenant(tenantId: string, channelAccountId: string) {
+    return this.requireAccount(tenantId, channelAccountId);
   }
 }
 

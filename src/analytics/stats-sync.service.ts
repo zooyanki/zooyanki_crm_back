@@ -10,6 +10,7 @@ const SYNC_ENTITY = 'stats';
 
 export interface StatsSyncResult {
   points: number;
+  spendings: number;
 }
 
 @Injectable()
@@ -31,7 +32,7 @@ export class StatsSyncService {
 
     if (!adapter.stats || !adapter.capabilities.has(Capability.READ_STATS)) {
       this.logger.warn(`Площадка ${channel} не отдаёт статистику, синхронизация пропущена`);
-      return { points: 0 };
+      return { points: 0, spendings: 0 };
     }
 
     const listings = await this.prisma.withTenant(ctx.tenantId, (tx) =>
@@ -41,24 +42,24 @@ export class StatsSyncService {
       }),
     );
 
-    if (listings.length === 0) {
-      return { points: 0 };
-    }
-
     const byExternalId = new Map(listings.map((row) => [row.externalId, row]));
 
-    const points = await adapter.stats.fetchDailyStats(ctx, {
-      externalIds: listings.map((row) => row.externalId),
-      from,
-      to,
-    });
+    const points =
+      listings.length === 0
+        ? []
+        : await adapter.stats.fetchDailyStats(ctx, {
+            externalIds: listings.map((row) => row.externalId),
+            from,
+            to,
+          });
+
+    const spendings = adapter.stats.fetchDailySpendings
+      ? await adapter.stats.fetchDailySpendings(ctx, from, to)
+      : [];
 
     await this.prisma.withTenant(ctx.tenantId, async (tx) => {
       for (const point of points) {
         const listing = byExternalId.get(point.externalId);
-
-        // Метрика по объявлению, которого нет в нашей базе, означает,
-        // что список публикаций устарел. Ждём следующей синхронизации.
         if (!listing) {
           continue;
         }
@@ -89,6 +90,28 @@ export class StatsSyncService {
         });
       }
 
+      for (const spending of spendings) {
+        await tx.statsAccountDaily.upsert({
+          where: {
+            channelAccountId_date: {
+              channelAccountId: ctx.channelAccountId,
+              date: spending.date,
+            },
+          },
+          create: {
+            tenantId: ctx.tenantId,
+            channelAccountId: ctx.channelAccountId,
+            date: spending.date,
+            spending: spending.spending,
+            currency: spending.currency,
+          },
+          update: {
+            spending: spending.spending,
+            currency: spending.currency,
+          },
+        });
+      }
+
       await tx.syncState.upsert({
         where: {
           channelAccountId_entity: { channelAccountId: ctx.channelAccountId, entity: SYNC_ENTITY },
@@ -104,8 +127,10 @@ export class StatsSyncService {
       });
     });
 
-    this.logger.log(`Сохранено ${points.length} точек статистики ${channel}`);
+    this.logger.log(
+      `Статистика ${channel}: ${points.length} точек метрик, ${spendings.length} дней расходов`,
+    );
 
-    return { points: points.length };
+    return { points: points.length, spendings: spendings.length };
   }
 }

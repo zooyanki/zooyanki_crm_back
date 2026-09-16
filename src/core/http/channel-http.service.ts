@@ -30,6 +30,10 @@ export interface ChannelRequest {
   channelAccountId?: string | null;
   maxAttempts?: number;
   timeoutMs?: number;
+  /// По умолчанию JSON; buffer — для PDF и других бинарных ответов.
+  responseType?: 'json' | 'buffer';
+  /// multipart/form-data (например, загрузка картинок в мессенджер).
+  formData?: FormData;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -109,7 +113,10 @@ export class ChannelHttpService {
         signal: controller.signal,
       });
 
-      const payload = await parseBody(response);
+      const payload =
+        req.responseType === 'buffer'
+          ? Buffer.from(await response.arrayBuffer())
+          : await parseBody(response);
       const durationMs = Date.now() - startedAt;
 
       await this.applyRateLimitHeaders(response, limitKey);
@@ -125,7 +132,8 @@ export class ChannelHttpService {
         ok: response.ok,
         errorText: response.ok ? null : String(response.statusText),
         request: req.json ?? req.form,
-        response: payload,
+        response:
+          payload instanceof Buffer ? { binary: true, bytes: payload.length } : payload,
       });
 
       if (!response.ok) {
@@ -205,7 +213,9 @@ function buildHeaders(req: ChannelRequest): Record<string, string> {
     headers.Authorization = `Bearer ${req.accessToken}`;
   }
 
-  if (req.json !== undefined) {
+  if (req.formData) {
+    // Content-Type с boundary выставит fetch сам.
+  } else if (req.json !== undefined) {
     headers['Content-Type'] = 'application/json';
   } else if (req.form !== undefined) {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
@@ -214,7 +224,11 @@ function buildHeaders(req: ChannelRequest): Record<string, string> {
   return headers;
 }
 
-function buildBody(req: ChannelRequest): string | undefined {
+function buildBody(req: ChannelRequest): string | FormData | undefined {
+  if (req.formData) {
+    return req.formData;
+  }
+
   if (req.json !== undefined) {
     return JSON.stringify(req.json);
   }

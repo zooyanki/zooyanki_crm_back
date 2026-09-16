@@ -4,7 +4,11 @@ import { Job, Queue } from 'bullmq';
 
 import { StatsSyncService } from '../analytics/stats-sync.service.js';
 import { ChannelAccountsService } from '../integrations/channel-accounts/channel-accounts.service.js';
+import { StockSyncService } from '../inventory/stock-sync.service.js';
 import { ListingSyncService } from '../listings/listing-sync.service.js';
+import { ChatSyncService } from '../messaging/chat-sync.service.js';
+import { OrderSyncService } from '../orders/order-sync.service.js';
+import { ReviewsService } from '../reviews/reviews.service.js';
 import { ChannelCode } from '../generated/prisma/enums.js';
 import {
   STATS_LOOKBACK_DAYS,
@@ -14,8 +18,6 @@ import {
   type SyncJob,
 } from './sync.types.js';
 
-/// Площадки, которые опрашиваются по расписанию. Ozon, WB и Drom
-/// добавляются сюда вместе со своими адаптерами.
 const POLLED_CHANNELS: ChannelCode[] = [ChannelCode.AVITO];
 
 @Processor(SYNC_QUEUE, { concurrency: 4 })
@@ -27,6 +29,10 @@ export class SyncProcessor extends WorkerHost {
     private readonly accounts: ChannelAccountsService,
     private readonly listingSync: ListingSyncService,
     private readonly statsSync: StatsSyncService,
+    private readonly orderSync: OrderSyncService,
+    private readonly stockSync: StockSyncService,
+    private readonly chatSync: ChatSyncService,
+    private readonly reviewsSync: ReviewsService,
   ) {
     super();
   }
@@ -55,8 +61,6 @@ export class SyncProcessor extends WorkerHost {
           channel,
         };
 
-        // Идентификатор задачи делает постановку идемпотентной: повторный
-        // веер в то же окно не создаст дубль работы.
         await this.queue.add('account', payload, {
           jobId: `${job.entity}:${account.id}:${currentWindow()}`,
           removeOnComplete: 100,
@@ -80,16 +84,32 @@ export class SyncProcessor extends WorkerHost {
       return;
     }
 
+    if (job.entity === 'orders') {
+      await this.orderSync.syncAccount(ctx, job.channel);
+      return;
+    }
+
+    if (job.entity === 'stocks') {
+      await this.stockSync.syncAccount(ctx, job.channel);
+      return;
+    }
+
+    if (job.entity === 'chats') {
+      await this.chatSync.syncAccount(ctx, job.channel);
+      return;
+    }
+
+    if (job.entity === 'reviews') {
+      await this.reviewsSync.syncAccount(ctx, job.channel);
+      return;
+    }
+
     const to = new Date();
     const from = new Date(to.getTime() - STATS_LOOKBACK_DAYS * 86_400_000);
-
     await this.statsSync.syncAccount(ctx, job.channel, from, to);
   }
 }
 
-/// Пятнадцатиминутное окно: достаточно грубое, чтобы гасить дубли
-/// от повторных веерных запусков, и достаточно мелкое, чтобы не блокировать
-/// ручной перезапуск надолго.
 function currentWindow(): number {
   return Math.floor(Date.now() / 900_000);
 }

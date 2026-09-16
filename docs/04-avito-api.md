@@ -82,7 +82,7 @@ ah:access             (иерархия аккаунтов, для authorization
 
 ### Остатки
 - `/stock-management/1/stocks` — установка остатков
-- `/stock-management/1/info` — текущие остатки
+- `POST /stock-management/1/info` — текущие остатки (до 10 id за запрос)
 
 ### Мессенджер
 - `GET  /messenger/v2/accounts/{user_id}/chats` — список чатов
